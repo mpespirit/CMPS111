@@ -1,0 +1,4 @@
+FAIL
+Kernel panic in run: PANIC at ../../devices/timer.c:106 in timer_sleep(): assertion `intr_get_level () == INTR_OFF' failed.
+Call stack: 0xc00275d3
+Translation of call stack:
