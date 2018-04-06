@@ -29,6 +29,9 @@ static intr_handler_func timer_interrupt;
 static void real_time_delay (int64_t num, int32_t denom);
 static void real_time_sleep (int64_t num, int32_t denom);
 
+// List to store threads put to sleep
+static struct list wait_list; 
+
 /* 
  * Sets up the timer to interrupt TIMER_FREQ times per second,
  * and registers the corresponding interrupt. 
@@ -38,6 +41,8 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  
+  list_init (&wait_list);
 }
 
 /* 
@@ -98,15 +103,26 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  ASSERT (intr_get_level () == INTR_ON);
+  struct thread *t = thread_current(); 
 
-  //lab says to modify this merp
-  //Check what the alarms do
-
-  ASSERT (intr_get_level () == INTR_OFF);
+  // Store when to wake up thread
+  // Wake Time = Start/Current + Time to Sleep
+  t->wake_time = timer_ticks() + ticks; 
+  
+  // Check if current thread needs to be preempted
+  //if( ticks - timer_elapsed(timer_ticks()) <= 0){
+  //  thread_yield();
+  //  return;
+  //}
+  
+  // Store thread in a waiting list before kicking off cpu
+  list_push_back (&wait_list, &t->elem); 
+  
+  // Turn off interrupts before putting thread to sleep
+  intr_disable();
   thread_block();
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  intr_enable();
 }
 
 /* 
@@ -201,6 +217,16 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  
+  struct list_elem *e = list_head(&wait_list); 
+  while((e = list_next(e)) != list_end(&wait_list)){
+    struct thread *t = list_entry (e, struct thread, elem);
+
+    if(ticks >= t->wake_time){ 
+      thread_unblock(t);
+      list_remove(e);
+    }
+  }
 }
 
 /* 
