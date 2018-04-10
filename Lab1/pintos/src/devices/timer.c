@@ -103,18 +103,11 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+  struct thread *t = thread_current();
   ASSERT (intr_get_level () == INTR_ON);
-  struct thread *t = thread_current(); 
 
-  // Store when to wake up thread
   // Wake Time = Start/Current + Time to Sleep
   t->wake_time = timer_ticks() + ticks; 
-  
-  // Check if current thread needs to be preempted
-  //if( ticks - timer_elapsed(timer_ticks()) <= 0){
-  //  thread_yield();
-  //  return;
-  //}
   
   // Store thread in a waiting list before kicking off cpu
   list_push_back (&wait_list, &t->elem); 
@@ -217,15 +210,19 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
-  
-  struct list_elem *e = list_head(&wait_list); 
-  while((e = list_next(e)) != list_end(&wait_list)){
+
+  // Iterate through the sleeping thread list and find which
+  // need to be woken up. Note: When using list_remove, the
+  // elem e needs to point to the next elem or e->prev 
+  // points to the elem that was removed. 
+  struct list_elem *e = list_begin(&wait_list); 
+  while(e != list_end(&wait_list)){
     struct thread *t = list_entry (e, struct thread, elem);
 
-    if(ticks >= t->wake_time){ 
+    if(timer_ticks() >= t->wake_time){ 
+      e = list_remove(e);
       thread_unblock(t);
-      list_remove(e);
-    }
+    } else e = list_next(e);
   }
 }
 
