@@ -243,6 +243,7 @@ thread_create(const char *name, int priority,
 
     /* Add to run queue. */
     thread_unblock(t);
+    thread_preempt();
 
     return tid;
 }
@@ -273,7 +274,11 @@ thread_block(void)
    This function does not preempt the running thread.  This can
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
-   update other data. */
+   update other data. 
+
+   Modified version preempts the current running thread
+   based on its priority and inserts into list based on
+   priority instead of pushing to back.*/
 void
 thread_unblock(struct thread *t)
 {
@@ -283,7 +288,8 @@ thread_unblock(struct thread *t)
 
     old_level = intr_disable();
     ASSERT(t->status == THREAD_BLOCKED);
-    list_push_back(&ready_list, &t->elem);
+    //list_push_back(&ready_list, &t->elem);
+    list_insert_ordered(&ready_list, &t->elem, thread_less_cmp, NULL);  
     t->status = THREAD_READY;
     intr_set_level(old_level);
 }
@@ -354,7 +360,8 @@ thread_yield(void)
 
     old_level = intr_disable();
     if (cur != idle_thread)
-        list_push_back(&ready_list, &cur->elem);
+        //list_push_back(&ready_list, &cur->elem);
+        list_insert_ordered(&ready_list, &cur->elem, thread_less_cmp, NULL);
     cur->status = THREAD_READY;
     schedule();
     intr_set_level(old_level);
@@ -376,11 +383,16 @@ thread_foreach(thread_action_func *func, void *aux)
     }
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+/* Sets the current thread's priority to NEW_PRIORITY. 
+
+   Modified version preempts the current thread if
+   another thread on the ready list has a higher
+   priority after the change.*/
 void
 thread_set_priority(int new_priority)
 {
     thread_current()->priority = new_priority;
+    thread_preempt();
 }
 
 /* Returns the current thread's priority. */
@@ -635,3 +647,16 @@ thread_less_cmp(const struct list_elem *a, const struct list_elem *b, void *aux)
     
     return ta->priority > tb->priority;
 }
+
+void
+thread_preempt(void){
+    enum intr_level old_level = intr_disable();
+
+    if(!list_empty(&ready_list)){
+        struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
+        if(t->priority > thread_current()->priority)
+            thread_yield();
+    }
+    intr_set_level(old_level);
+}
+

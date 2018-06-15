@@ -74,8 +74,7 @@ semaphore_down(struct semaphore *sema)
     enum intr_level old_level = intr_disable();
     while (sema->value == 0) {
     	//Modified from list_push_back to list_insert_ordered
-        list_insert_ordered(&sema->waiters, &thread_current()->elem, thread_less_cmp, 
-                              NULL);
+        list_insert_ordered(&sema->waiters, &thread_current()->elem, thread_less_cmp, NULL);
         thread_block();
     }
     sema->value--;
@@ -126,5 +125,6 @@ semaphore_up(struct semaphore *semaphore)
             list_pop_front(&semaphore->waiters), struct thread, elem));
     }
     semaphore->value++;
+    thread_preempt();
     intr_set_level(old_level);
 }

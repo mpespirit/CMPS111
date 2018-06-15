@@ -138,4 +138,5 @@ int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
 bool thread_less_cmp(const struct list_elem *x, const struct list_elem *y, void *aux);
+void thread_preempt(void);
 #endif /* threads/thread.h */
